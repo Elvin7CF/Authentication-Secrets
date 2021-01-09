@@ -4,7 +4,13 @@ const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
-const encrypt = require("mongoose-encryption");
+//Level 2加密
+// const encrypt = require("mongoose-encryption");
+//level 3 Hash
+// const md5 = require("md5");
+//level 4 Salting and Hash
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 app.use(express.static("public"));
@@ -20,9 +26,9 @@ const userSchema = new mongoose.Schema({
     password: String
 });
 
-//用mongoose-encrytion模块加密password
+//Level2 用mongoose-encrytion模块加密password
 //把密钥保存在.env隐藏文件中，通过dotenv模块调用他
-userSchema.plugin(encrypt,{ secret: process.env.SECRET, encryptedFields: ['password']});
+// userSchema.plugin(encrypt,{ secret: process.env.SECRET, encryptedFields: ['password']});
 
 const User = new mongoose.model("User",userSchema);
 
@@ -40,18 +46,21 @@ app.get("/register",function(req,res){
 
 app.post("/register",function(req,res){
     const username = req.body.username;
-    const password = req.body.password;
-    const newUser = new User({
-        email: username,
-        password: password
-    })
-    newUser.save(function(err){
-        if(err){
-            console.log(err);
-        }else{
-            res.render("secrets");
+    bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+        if(!err){
+            const newUser = new User({
+                email: username,
+                password: hash
+            });
+            newUser.save(function(err){
+                if(err){
+                    console.log(err);
+                }else{
+                    res.render("secrets");
+                }
+            })
         }
-    })
+    });
 });
 
 app.post("/login", function(req,res){
@@ -62,11 +71,15 @@ app.post("/login", function(req,res){
             console.log(err);
         }else{
             if(foundUser){
-                if(foundUser.password === password){
-                    res.render("secrets");
-                }else{
-                    res.send("密码错误");
-                }
+                bcrypt.compare(password, foundUser.password, function(err, result) {
+                    if(!err){
+                        if(result){
+                            res.render("secrets");
+                        }else{
+                            res.send("密码错误");
+                        }
+                    }
+                });
             }
         }
     })
